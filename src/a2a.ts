@@ -29,32 +29,38 @@ export function toAgentCard(
     ? `${manifest.author}/${manifest.name}`
     : manifest.name
 
-  const skills: A2ASkill[] = manifest.endpoints.map(ep => {
-    const slug = ep.path
-      .replace(/^\//, '')
-      .replace(/\//g, '_')
-      .replace(/[^a-zA-Z0-9_-]/g, '')
+  const skills: A2ASkill[] = manifest.endpoints.length > 0
+    ? manifest.endpoints.map(ep => {
+        const slug = ep.path
+          .replace(/^\//, '')
+          .replace(/\//g, '_')
+          .replace(/[^a-zA-Z0-9_-]/g, '')
 
-    const skill: A2ASkill = {
-      id: `${manifest.name}_${slug}`,
-      name: ep.description,
-      description: `${ep.method} ${ep.path} — ${ep.priceUsdc} USDC`
-    }
+        const skill: A2ASkill = {
+          id: `${manifest.name}_${slug}`,
+          name: ep.description,
+          description: `${ep.method} ${ep.path} — ${ep.priceUsdc} USDC`
+        }
 
-    if (manifest.tags?.length) {
-      skill.tags = manifest.tags
-    }
+        if (manifest.tags?.length) {
+          skill.tags = manifest.tags
+        }
 
-    if (ep.inputSchema) {
-      skill.inputModes = ['application/json']
-    }
+        if (ep.inputSchema) {
+          skill.inputModes = ['application/json']
+        }
 
-    if (ep.outputSchema) {
-      skill.outputModes = ['application/json']
-    }
+        if (ep.outputSchema) {
+          skill.outputModes = ['application/json']
+        }
 
-    return skill
-  })
+        return skill
+      })
+    : [{
+        id: manifest.name,
+        name: manifest.displayName ?? manifest.name,
+        description: manifest.description
+      }]
 
   const card: A2AAgentCard = {
     schemaVersion: '1.0',

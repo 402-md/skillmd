@@ -17,6 +17,14 @@ export interface McpToolDefinition {
 export function toMcpToolDefinitions(
   manifest: SkillManifest
 ): McpToolDefinition[] {
+  if (manifest.endpoints.length === 0) {
+    return [{
+      name: manifest.name,
+      description: manifest.description,
+      inputSchema: { type: 'object', properties: {} }
+    }]
+  }
+
   return manifest.endpoints.map(ep => {
     const slug = ep.path
       .replace(/^\//, '')

@@ -127,10 +127,15 @@ describe('toAgentCard', () => {
     expect(card.documentationUrl).toBe('https://docs.example.com')
   })
 
-  it('handles empty endpoints', () => {
+  it('creates fallback skill for empty endpoints', () => {
     const card = toAgentCard(makeManifest({ endpoints: [] }))
 
-    expect(card.skills).toBeUndefined()
+    expect(card.skills).toHaveLength(1)
+    expect(card.skills![0]).toMatchObject({
+      id: 'weather-api',
+      name: 'weather-api',
+      description: 'Real-time weather data'
+    })
   })
 
   it('sets inputModes when inputSchema is present', () => {

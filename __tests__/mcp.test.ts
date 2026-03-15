@@ -99,11 +99,13 @@ describe('toMcpToolDefinitions', () => {
     expect(tools[0].description).toContain('via base')
   })
 
-  it('handles manifest with no endpoints', () => {
+  it('returns fallback tool for manifest with no endpoints', () => {
     const tools = toMcpToolDefinitions(
       makeManifest({ endpoints: [] })
     )
 
-    expect(tools).toHaveLength(0)
+    expect(tools).toHaveLength(1)
+    expect(tools[0].name).toBe('weather-api')
+    expect(tools[0].description).toBe('Real-time weather data')
   })
 })
