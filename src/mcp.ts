@@ -1,4 +1,5 @@
 import type { SkillManifest } from './types'
+import { DYNAMIC_PRICE } from './constants'
 
 /**
  * MCP tool definition shape.
@@ -35,9 +36,14 @@ export function toMcpToolDefinitions(
 
     const network = manifest.payment.networks[0]?.network ?? 'unknown'
 
+    const priceLabel =
+      ep.priceUsdc === DYNAMIC_PRICE
+        ? `dynamic pricing${ep.estimatedPriceUsdc ? `, ~${ep.estimatedPriceUsdc} USDC est.` : ''} via ${network}`
+        : `${ep.priceUsdc} USDC via ${network}`
+
     return {
       name: `${manifest.name}_${slug}`,
-      description: `${ep.description} (${ep.priceUsdc} USDC via ${network})`,
+      description: `${ep.description} (${priceLabel})`,
       inputSchema: ep.inputSchema ?? { type: 'object', properties: {} }
     }
   })

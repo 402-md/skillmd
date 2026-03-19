@@ -1,4 +1,10 @@
-import { SKILL_TYPES, HTTP_METHODS, PAYMENT_NETWORKS } from './constants'
+import {
+  SKILL_TYPES,
+  HTTP_METHODS,
+  PAYMENT_NETWORKS,
+  PRICING_MODELS,
+  DELIVERY_MODES
+} from './constants'
 
 /**
  * JSON Schema for SKILL.md v2 frontmatter validation.
@@ -117,8 +123,24 @@ export const SKILLMD_JSON_SCHEMA = {
           },
           priceUsdc: {
             type: 'string',
+            pattern: '^(\\d+(\\.\\d+)?|dynamic)$',
+            description:
+              'Price in USDC (e.g. "0.001") or "dynamic" for variable pricing'
+          },
+          estimatedPriceUsdc: {
+            type: 'string',
             pattern: '^\\d+(\\.\\d+)?$',
-            description: 'Price in USDC (e.g. "0.001")'
+            description: 'Estimated price for dynamic endpoints (e.g. "25.00")'
+          },
+          duration: {
+            type: 'string',
+            pattern: '^\\d+(m|h|d|y)$',
+            description: 'Access duration (e.g. "30d", "1h", "1y")'
+          },
+          deliveryMode: {
+            type: 'string',
+            enum: [...DELIVERY_MODES],
+            description: 'How results are delivered: sync, polling, or webhook'
           },
           inputSchema: {
             type: 'object',
@@ -153,6 +175,27 @@ export const SKILLMD_JSON_SCHEMA = {
       type: 'string',
       format: 'uri',
       description: 'Free test endpoint URL'
+    },
+    pricingModel: {
+      type: 'string',
+      enum: [...PRICING_MODELS],
+      description: 'Payment model: fixed, dynamic, subscription, cart, free'
+    },
+    auth: {
+      type: 'object',
+      properties: {
+        method: {
+          type: 'string',
+          description: 'Authentication method (e.g. "wallet-signature")'
+        },
+        loginEndpoint: {
+          type: 'string',
+          pattern: '^/',
+          description: 'Endpoint for wallet-based authentication'
+        }
+      },
+      required: ['method'],
+      additionalProperties: false
     },
     'allowed-tools': {
       oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],

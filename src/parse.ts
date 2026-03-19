@@ -1,11 +1,14 @@
 import YAML from 'yaml'
 import type {
+  AuthConfig,
+  DeliveryMode,
   EndpointSpec,
   HttpMethod,
   LegacyFrontmatter,
   NetworkConfig,
   PaymentConfig,
   PaymentNetwork,
+  PricingModel,
   SkillManifest,
   SkillType
 } from './types'
@@ -13,7 +16,8 @@ import {
   FRONTMATTER_RE,
   SKILL_TYPES_SET,
   HTTP_METHODS_SET,
-  PAYMENT_NETWORKS_SET
+  PAYMENT_NETWORKS_SET,
+  PRICING_MODELS_SET
 } from './constants'
 
 // ── Public API ──────────────────────────────────────────
@@ -92,6 +96,8 @@ function buildManifest(
     endpoints,
     tags: getStringArray(data, 'tags'),
     category: getString(data, 'category'),
+    pricingModel: parsePricingModel(data),
+    auth: parseAuth(data),
     sla: getString(data, 'sla'),
     rateLimit: getString(data, 'rateLimit'),
     sandbox: getString(data, 'sandbox'),
@@ -178,10 +184,41 @@ function parseEndpoints(data: Record<string, unknown>): EndpointSpec[] {
         method: (HTTP_METHODS_SET.has(method) ? method : 'POST') as HttpMethod,
         description: getString(ep, 'description') ?? '',
         priceUsdc: getString(ep, 'priceUsdc') ?? getString(ep, 'price') ?? '0',
+        ...(getString(ep, 'estimatedPriceUsdc') && {
+          estimatedPriceUsdc: getString(ep, 'estimatedPriceUsdc')
+        }),
+        ...(getString(ep, 'duration') && {
+          duration: getString(ep, 'duration')
+        }),
+        ...(getString(ep, 'deliveryMode') && {
+          deliveryMode: getString(ep, 'deliveryMode') as DeliveryMode
+        }),
         inputSchema: getObject(ep, 'inputSchema'),
         outputSchema: getObject(ep, 'outputSchema')
       }
     })
+}
+
+function parsePricingModel(
+  data: Record<string, unknown>
+): PricingModel | undefined {
+  const val = getString(data, 'pricingModel')
+  if (val && PRICING_MODELS_SET.has(val)) return val as PricingModel
+  return undefined
+}
+
+function parseAuth(data: Record<string, unknown>): AuthConfig | undefined {
+  const raw = data.auth
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const auth = raw as Record<string, unknown>
+  const method = getString(auth, 'method')
+  if (!method) return undefined
+  return {
+    method,
+    ...(getString(auth, 'loginEndpoint') && {
+      loginEndpoint: getString(auth, 'loginEndpoint')
+    })
+  }
 }
 
 function parseAllowedTools(

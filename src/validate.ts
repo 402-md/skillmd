@@ -9,7 +9,11 @@ import { parseSkillMd } from './parse'
 import {
   SKILL_TYPES_SET,
   HTTP_METHODS_SET,
-  PAYMENT_NETWORKS_SET
+  PAYMENT_NETWORKS_SET,
+  DYNAMIC_PRICE,
+  PRICING_MODELS_SET,
+  DELIVERY_MODES_SET,
+  DURATION_RE
 } from './constants'
 
 const NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
@@ -46,6 +50,9 @@ export function validateSkill(manifest: SkillManifest): ValidationResult {
     validatePayment(manifest.payment, errors, warnings)
     validateEndpoints(manifest.endpoints, errors, warnings)
   }
+
+  validatePricingModel(manifest.pricingModel, warnings)
+  validateAuth(manifest.auth, errors)
 
   return {
     valid: errors.length === 0,
@@ -261,11 +268,57 @@ function validateEndpoints(
       })
     }
 
-    if (!PRICE_RE.test(ep.priceUsdc)) {
+    const isDynamic = ep.priceUsdc === DYNAMIC_PRICE
+    if (!isDynamic && !PRICE_RE.test(ep.priceUsdc)) {
       errors.push({
         field: `${prefix}.priceUsdc`,
-        message: `Invalid price "${ep.priceUsdc}". Must be a decimal string (e.g. "0.001")`,
+        message: `Invalid price "${ep.priceUsdc}". Must be a decimal string (e.g. "0.001") or "dynamic"`,
         code: 'INVALID_FORMAT'
+      })
+    }
+
+    if (ep.estimatedPriceUsdc !== undefined) {
+      if (!isDynamic) {
+        warnings.push({
+          field: `${prefix}.estimatedPriceUsdc`,
+          message:
+            'estimatedPriceUsdc is only meaningful when priceUsdc is "dynamic"',
+          code: 'UNNECESSARY_FIELD'
+        })
+      }
+      if (!PRICE_RE.test(ep.estimatedPriceUsdc)) {
+        errors.push({
+          field: `${prefix}.estimatedPriceUsdc`,
+          message: `Invalid estimatedPriceUsdc "${ep.estimatedPriceUsdc}". Must be a decimal string`,
+          code: 'INVALID_FORMAT'
+        })
+      }
+    }
+
+    if (isDynamic && !ep.estimatedPriceUsdc) {
+      warnings.push({
+        field: `${prefix}.estimatedPriceUsdc`,
+        message: 'Dynamic pricing without estimate — agents cannot budget',
+        code: 'MISSING_OPTIONAL'
+      })
+    }
+
+    if (ep.duration !== undefined && !DURATION_RE.test(ep.duration)) {
+      errors.push({
+        field: `${prefix}.duration`,
+        message: `Invalid duration "${ep.duration}". Must match format like "30d", "1h", "1y"`,
+        code: 'INVALID_FORMAT'
+      })
+    }
+
+    if (
+      ep.deliveryMode !== undefined &&
+      !DELIVERY_MODES_SET.has(ep.deliveryMode)
+    ) {
+      errors.push({
+        field: `${prefix}.deliveryMode`,
+        message: `Invalid deliveryMode "${ep.deliveryMode}". Must be: sync, polling, webhook`,
+        code: 'INVALID_ENUM'
       })
     }
 
@@ -311,6 +364,37 @@ function validateTags(
       field: 'tags',
       message: 'Too many tags (max 20)',
       code: 'TOO_MANY'
+    })
+  }
+}
+
+function validatePricingModel(
+  pricingModel: string | undefined,
+  warnings: ValidationWarning[]
+) {
+  if (pricingModel && !PRICING_MODELS_SET.has(pricingModel)) {
+    warnings.push({
+      field: 'pricingModel',
+      message: `Unknown pricingModel "${pricingModel}". Known values: ${[...PRICING_MODELS_SET].join(', ')}`,
+      code: 'INVALID_ENUM'
+    })
+  }
+}
+
+function validateAuth(auth: SkillManifest['auth'], errors: ValidationError[]) {
+  if (!auth) return
+  if (!auth.method) {
+    errors.push({
+      field: 'auth.method',
+      message: 'auth.method is required when auth is specified',
+      code: 'REQUIRED'
+    })
+  }
+  if (auth.loginEndpoint && !auth.loginEndpoint.startsWith('/')) {
+    errors.push({
+      field: 'auth.loginEndpoint',
+      message: 'auth.loginEndpoint must start with /',
+      code: 'INVALID_FORMAT'
     })
   }
 }

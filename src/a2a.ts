@@ -1,3 +1,4 @@
+import { DYNAMIC_PRICE } from './constants'
 import type {
   SkillManifest,
   A2AAgentCard,
@@ -37,10 +38,15 @@ export function toAgentCard(
             .replace(/\//g, '_')
             .replace(/[^a-zA-Z0-9_-]/g, '')
 
+          const priceLabel =
+            ep.priceUsdc === DYNAMIC_PRICE
+              ? `dynamic${ep.estimatedPriceUsdc ? ` (~${ep.estimatedPriceUsdc} USDC est.)` : ''}`
+              : `${ep.priceUsdc} USDC`
+
           const skill: A2ASkill = {
             id: `${manifest.name}_${slug}`,
             name: ep.description,
-            description: `${ep.method} ${ep.path} — ${ep.priceUsdc} USDC`
+            description: `${ep.method} ${ep.path} — ${priceLabel}`
           }
 
           if (manifest.tags?.length) {

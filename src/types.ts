@@ -25,6 +25,10 @@ export interface SkillManifest {
   rateLimit?: string
   sandbox?: string
 
+  // Pricing & delivery
+  pricingModel?: PricingModel
+  auth?: AuthConfig
+
   // Agent integration (Anthropic Claude Code compatibility)
   allowedTools?: string[]
 
@@ -48,6 +52,9 @@ export interface EndpointSpec {
   method: HttpMethod
   description: string
   priceUsdc: string
+  estimatedPriceUsdc?: string
+  duration?: string
+  deliveryMode?: DeliveryMode
   inputSchema?: JSONSchema
   outputSchema?: JSONSchema
 }
@@ -68,6 +75,20 @@ export type PaymentNetwork =
   | 'stellar-testnet'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+
+export type PricingModel =
+  | 'fixed'
+  | 'dynamic'
+  | 'subscription'
+  | 'cart'
+  | 'free'
+
+export type DeliveryMode = 'sync' | 'polling' | 'webhook'
+
+export interface AuthConfig {
+  method: string
+  loginEndpoint?: string
+}
 
 export type JSONSchema = Record<string, unknown>
 
@@ -102,6 +123,8 @@ export interface SkillConfig {
   license?: string
   base_url?: string
   type?: SkillType
+  pricingModel?: PricingModel
+  auth?: AuthConfig
   payment?: Partial<PaymentConfig>
   endpoints?: EndpointSpec[]
   tags?: string[]

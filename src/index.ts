@@ -19,7 +19,14 @@ export type { ToAgentCardOptions } from './a2a'
 export { SKILLMD_JSON_SCHEMA } from './schema'
 
 // ── Constants ──────────────────────────────────────────
-export { SKILL_TYPES, HTTP_METHODS, PAYMENT_NETWORKS } from './constants'
+export {
+  SKILL_TYPES,
+  HTTP_METHODS,
+  PAYMENT_NETWORKS,
+  PRICING_MODELS,
+  DELIVERY_MODES,
+  DYNAMIC_PRICE
+} from './constants'
 
 // ── Types ──────────────────────────────────────────────
 export type {
@@ -28,6 +35,9 @@ export type {
   EndpointSpec,
   PaymentConfig,
   NetworkConfig,
+  PricingModel,
+  DeliveryMode,
+  AuthConfig,
   SkillType,
   PaymentNetwork,
   HttpMethod,
