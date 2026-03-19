@@ -8,6 +8,7 @@ import type {
   SkillConfig,
   SkillManifest
 } from './types'
+import { DYNAMIC_PRICE } from './constants'
 
 // ── Public API ──────────────────────────────────────────
 
@@ -127,7 +128,10 @@ export function toOpenAPI(manifest: SkillManifest): OpenAPISpec {
         })
       },
       '402': {
-        description: `Payment Required — ${ep.priceUsdc} USDC`
+        description:
+          ep.priceUsdc === DYNAMIC_PRICE
+            ? `Payment Required — dynamic pricing${ep.estimatedPriceUsdc ? ` (~${ep.estimatedPriceUsdc} USDC est.)` : ''}`
+            : `Payment Required — ${ep.priceUsdc} USDC`
       }
     }
 
@@ -160,6 +164,14 @@ function buildFrontmatter(config: SkillConfig): Record<string, unknown> {
   if (config.license) fm.license = config.license
   if (config.base_url) fm.base_url = config.base_url
   fm.type = config.type ?? 'API'
+  if (config.pricingModel) fm.pricingModel = config.pricingModel
+
+  if (config.auth) {
+    const authEntry: Record<string, unknown> = { method: config.auth.method }
+    if (config.auth.loginEndpoint)
+      authEntry.loginEndpoint = config.auth.loginEndpoint
+    fm.auth = authEntry
+  }
 
   if (config.payment?.networks?.length) {
     fm.payment = {
@@ -183,6 +195,10 @@ function buildFrontmatter(config: SkillConfig): Record<string, unknown> {
         description: ep.description,
         priceUsdc: ep.priceUsdc
       }
+      if (ep.estimatedPriceUsdc)
+        entry.estimatedPriceUsdc = ep.estimatedPriceUsdc
+      if (ep.duration) entry.duration = ep.duration
+      if (ep.deliveryMode) entry.deliveryMode = ep.deliveryMode
       if (ep.inputSchema) entry.inputSchema = ep.inputSchema
       if (ep.outputSchema) entry.outputSchema = ep.outputSchema
       return entry
