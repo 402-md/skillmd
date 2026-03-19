@@ -32,12 +32,15 @@ export interface SkillManifest {
   body: string
 }
 
-export interface PaymentConfig {
-  networks: PaymentNetwork[]
-  asset: string
+export interface NetworkConfig {
+  network: PaymentNetwork
   payTo: string
-  payToEvm?: string
   facilitator?: string
+}
+
+export interface PaymentConfig {
+  networks: NetworkConfig[]
+  asset: string
 }
 
 export interface EndpointSpec {
@@ -99,7 +102,7 @@ export interface SkillConfig {
   license?: string
   base_url?: string
   type?: SkillType
-  payment?: PaymentConfig
+  payment?: Partial<PaymentConfig>
   endpoints?: EndpointSpec[]
   tags?: string[]
   category?: string

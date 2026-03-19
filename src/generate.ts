@@ -149,7 +149,6 @@ export function toOpenAPI(manifest: SkillManifest): OpenAPISpec {
 // ── Internal ────────────────────────────────────────────
 
 function buildFrontmatter(config: SkillConfig): Record<string, unknown> {
-  const isSkillType = (config.type ?? 'API') === 'SKILL'
   const fm: Record<string, unknown> = {
     name: config.name
   }
@@ -162,16 +161,16 @@ function buildFrontmatter(config: SkillConfig): Record<string, unknown> {
   if (config.base_url) fm.base_url = config.base_url
   fm.type = config.type ?? 'API'
 
-  if (config.payment) {
+  if (config.payment?.networks?.length) {
     fm.payment = {
-      networks: config.payment.networks,
       asset: config.payment.asset || 'USDC',
-      payTo: config.payment.payTo,
-      ...(config.payment.payToEvm && {
-        payToEvm: config.payment.payToEvm
-      }),
-      ...(config.payment.facilitator && {
-        facilitator: config.payment.facilitator
+      networks: config.payment.networks.map(nc => {
+        const entry: Record<string, unknown> = {
+          network: nc.network,
+          payTo: nc.payTo
+        }
+        if (nc.facilitator) entry.facilitator = nc.facilitator
+        return entry
       })
     }
   }
@@ -195,8 +194,7 @@ function buildFrontmatter(config: SkillConfig): Record<string, unknown> {
   if (config.sla) fm.sla = config.sla
   if (config.rateLimit) fm.rateLimit = config.rateLimit
   if (config.sandbox) fm.sandbox = config.sandbox
-  if (config.allowedTools?.length)
-    fm['allowed-tools'] = config.allowedTools
+  if (config.allowedTools?.length) fm['allowed-tools'] = config.allowedTools
 
   return fm
 }

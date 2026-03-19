@@ -67,14 +67,19 @@ describe('parseSkillMd', () => {
     expect(manifest.base_url).toBe('https://api.weatherco.com')
     expect(manifest.type).toBe('API')
 
-    expect(manifest.payment.networks).toEqual(['stellar', 'base'])
+    expect(manifest.payment.networks).toEqual([
+      {
+        network: 'stellar',
+        payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW',
+        facilitator: 'https://x402.org/facilitator'
+      },
+      {
+        network: 'base',
+        payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW',
+        facilitator: 'https://x402.org/facilitator'
+      }
+    ])
     expect(manifest.payment.asset).toBe('USDC')
-    expect(manifest.payment.payTo).toBe(
-      'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW'
-    )
-    expect(manifest.payment.facilitator).toBe(
-      'https://x402.org/facilitator'
-    )
 
     expect(manifest.endpoints).toHaveLength(2)
     expect(manifest.endpoints[0].path).toBe('/v1/current')
@@ -102,9 +107,8 @@ describe('parseSkillMd', () => {
     expect(manifest.type).toBe('API')
 
     // v1 fallback defaults
-    expect(manifest.payment.networks).toEqual(['base'])
+    expect(manifest.payment.networks).toEqual([{ network: 'base', payTo: '' }])
     expect(manifest.payment.asset).toBe('USDC')
-    expect(manifest.payment.payTo).toBe('')
 
     // price field mapped to priceUsdc
     expect(manifest.endpoints).toHaveLength(1)
@@ -164,7 +168,18 @@ body`
     const manifest = parseSkillMd(crlf)
 
     expect(manifest.name).toBe('weather-api')
-    expect(manifest.payment.networks).toEqual(['stellar', 'base'])
+    expect(manifest.payment.networks).toEqual([
+      {
+        network: 'stellar',
+        payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW',
+        facilitator: 'https://x402.org/facilitator'
+      },
+      {
+        network: 'base',
+        payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW',
+        facilitator: 'https://x402.org/facilitator'
+      }
+    ])
     expect(manifest.endpoints).toHaveLength(2)
     expect(manifest.body).toContain('Weather API')
   })
@@ -213,7 +228,7 @@ When reviewing code, check for security vulnerabilities.`
     expect(manifest.allowedTools).toEqual(['Read', 'Grep', 'Glob'])
     expect(manifest.base_url).toBe('')
     expect(manifest.endpoints).toEqual([])
-    expect(manifest.payment.payTo).toBe('')
+    expect(manifest.payment.networks[0].payTo).toBe('')
     expect(manifest.body).toContain('Code Reviewer')
   })
 
@@ -291,7 +306,83 @@ Call /v1/current for current conditions.`
     expect(manifest.type).toBe('API')
     expect(manifest.allowedTools).toEqual(['Read', 'Bash'])
     expect(manifest.endpoints).toHaveLength(1)
-    expect(manifest.payment.payTo).toContain('GABC')
+    expect(manifest.payment.networks[0].payTo).toContain('GABC')
+  })
+
+  it('parses new v2.1 per-network format natively', () => {
+    const content = `---
+name: multi-chain-api
+description: Multi-chain API
+base_url: https://api.example.com
+type: API
+payment:
+  asset: USDC
+  networks:
+    - network: stellar
+      payTo: GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW
+      facilitator: https://stellar-facilitator.402.md
+    - network: base
+      payTo: "0x1234567890abcdef1234567890abcdef12345678"
+      facilitator: https://base-facilitator.402.md
+endpoints:
+  - path: /v1/run
+    method: POST
+    description: Run it
+    priceUsdc: "0.01"
+---
+
+body`
+
+    const manifest = parseSkillMd(content)
+    expect(manifest.payment.asset).toBe('USDC')
+    expect(manifest.payment.networks).toHaveLength(2)
+    expect(manifest.payment.networks[0]).toEqual({
+      network: 'stellar',
+      payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW',
+      facilitator: 'https://stellar-facilitator.402.md'
+    })
+    expect(manifest.payment.networks[1]).toEqual({
+      network: 'base',
+      payTo: '0x1234567890abcdef1234567890abcdef12345678',
+      facilitator: 'https://base-facilitator.402.md'
+    })
+  })
+
+  it('converts legacy flat payTo/payToEvm to per-network config', () => {
+    const content = `---
+name: legacy-multi
+description: Legacy multi-chain
+base_url: https://api.example.com
+type: API
+payment:
+  networks: [stellar, base]
+  asset: USDC
+  payTo: GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW
+  payToEvm: "0x1234567890abcdef1234567890abcdef12345678"
+  facilitator: https://facilitator.402.md
+endpoints:
+  - path: /v1/run
+    method: POST
+    description: Run it
+    priceUsdc: "0.01"
+---
+
+body`
+
+    const manifest = parseSkillMd(content)
+    expect(manifest.payment.networks).toHaveLength(2)
+    // Stellar gets the payTo address
+    expect(manifest.payment.networks[0]).toEqual({
+      network: 'stellar',
+      payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW',
+      facilitator: 'https://facilitator.402.md'
+    })
+    // Base gets the payToEvm address
+    expect(manifest.payment.networks[1]).toEqual({
+      network: 'base',
+      payTo: '0x1234567890abcdef1234567890abcdef12345678',
+      facilitator: 'https://facilitator.402.md'
+    })
   })
 })
 

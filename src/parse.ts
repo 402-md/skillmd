@@ -3,6 +3,7 @@ import type {
   EndpointSpec,
   HttpMethod,
   LegacyFrontmatter,
+  NetworkConfig,
   PaymentConfig,
   PaymentNetwork,
   SkillManifest,
@@ -69,7 +70,7 @@ function buildManifest(
   // base_url is optional for SKILL type (pure agent instructions)
   const base_url =
     type === 'SKILL'
-      ? getString(data, 'base_url') ?? ''
+      ? (getString(data, 'base_url') ?? '')
       : requireString(data, 'base_url')
 
   const payment = parsePayment(data)
@@ -99,35 +100,67 @@ function buildManifest(
   }
 }
 
+const EVM_NETWORKS = new Set<string>(['base', 'base-sepolia'])
+
 function parsePayment(data: Record<string, unknown>): PaymentConfig {
   const raw = data.payment
 
   // v2 format: payment block
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
     const payment = raw as Record<string, unknown>
-    const networks = parseNetworks(payment.networks)
+    const networks = parseNetworks(payment)
     return {
       networks,
-      asset: getString(payment, 'asset') ?? 'USDC',
-      payTo: requireString(payment, 'payTo'),
-      payToEvm: getString(payment, 'payToEvm'),
-      facilitator: getString(payment, 'facilitator')
+      asset: getString(payment, 'asset') ?? 'USDC'
     }
   }
 
   // v1 fallback: no payment block — return defaults
   return {
-    networks: ['base'],
-    asset: 'USDC',
-    payTo: ''
+    networks: [{ network: 'base', payTo: '' }],
+    asset: 'USDC'
   }
 }
 
-function parseNetworks(raw: unknown): PaymentNetwork[] {
-  if (!Array.isArray(raw)) return ['base']
+function parseNetworks(payment: Record<string, unknown>): NetworkConfig[] {
+  const raw = payment.networks
+  if (!Array.isArray(raw)) return [{ network: 'base', payTo: '' }]
+
+  // New format: array of objects { network, payTo, facilitator? }
+  if (raw.length > 0 && typeof raw[0] === 'object' && raw[0] !== null) {
+    return raw
+      .filter(n => n && typeof n === 'object')
+      .map(n => {
+        const obj = n as Record<string, unknown>
+        const network = getString(obj, 'network') ?? 'base'
+        return {
+          network: (PAYMENT_NETWORKS_SET.has(network)
+            ? network
+            : 'base') as PaymentNetwork,
+          payTo: getString(obj, 'payTo') ?? '',
+          ...(getString(obj, 'facilitator') && {
+            facilitator: getString(obj, 'facilitator')
+          })
+        }
+      })
+  }
+
+  // Legacy format: array of strings + top-level payTo/payToEvm/facilitator
+  const payTo = getString(payment, 'payTo') ?? ''
+  const payToEvm = getString(payment, 'payToEvm')
+  const facilitator = getString(payment, 'facilitator')
+
   return raw
     .filter(n => typeof n === 'string' && PAYMENT_NETWORKS_SET.has(n))
-    .map(n => n as PaymentNetwork)
+    .map(n => {
+      const network = n as PaymentNetwork
+      const address = EVM_NETWORKS.has(network) && payToEvm ? payToEvm : payTo
+      return {
+        network,
+        payTo: address,
+        ...(facilitator && { facilitator })
+      }
+    })
 }
 
 function parseEndpoints(data: Record<string, unknown>): EndpointSpec[] {

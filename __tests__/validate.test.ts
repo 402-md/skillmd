@@ -11,9 +11,13 @@ function makeManifest(
     base_url: 'https://api.example.com',
     type: 'API',
     payment: {
-      networks: ['base'],
-      asset: 'USDC',
-      payTo: '0x1234567890abcdef1234567890abcdef12345678'
+      networks: [
+        {
+          network: 'base',
+          payTo: '0x1234567890abcdef1234567890abcdef12345678'
+        }
+      ],
+      asset: 'USDC'
     },
     endpoints: [
       {
@@ -72,7 +76,7 @@ describe('validateSkill', () => {
   it('fails for missing payment networks', () => {
     const result = validateSkill(
       makeManifest({
-        payment: { networks: [], asset: 'USDC', payTo: '0x1234567890abcdef1234567890abcdef12345678' }
+        payment: { networks: [], asset: 'USDC' }
       })
     )
     expect(result.valid).toBe(false)
@@ -87,13 +91,16 @@ describe('validateSkill', () => {
   it('fails for missing payTo', () => {
     const result = validateSkill(
       makeManifest({
-        payment: { networks: ['base'], asset: 'USDC', payTo: '' }
+        payment: {
+          networks: [{ network: 'base', payTo: '' }],
+          asset: 'USDC'
+        }
       })
     )
     expect(result.valid).toBe(false)
     expect(result.errors).toContainEqual(
       expect.objectContaining({
-        field: 'payment.payTo',
+        field: 'payment.networks[0].payTo',
         code: 'REQUIRED'
       })
     )
@@ -103,16 +110,15 @@ describe('validateSkill', () => {
     const result = validateSkill(
       makeManifest({
         payment: {
-          networks: ['base'],
-          asset: 'USDC',
-          payTo: 'not-an-address'
+          networks: [{ network: 'base', payTo: 'not-an-address' }],
+          asset: 'USDC'
         }
       })
     )
     expect(result.valid).toBe(true) // warning, not error
     expect(result.warnings).toContainEqual(
       expect.objectContaining({
-        field: 'payment.payTo',
+        field: 'payment.networks[0].payTo',
         code: 'SUSPICIOUS_ADDRESS'
       })
     )
@@ -201,15 +207,90 @@ describe('validateSkill', () => {
     const result = validateSkill(
       makeManifest({
         payment: {
-          networks: ['stellar'],
-          asset: 'USDC',
-          payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW'
+          networks: [
+            {
+              network: 'stellar',
+              payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW'
+            }
+          ],
+          asset: 'USDC'
         }
       })
     )
     expect(result.valid).toBe(true)
     expect(
       result.warnings.find(w => w.code === 'SUSPICIOUS_ADDRESS')
+    ).toBeUndefined()
+  })
+
+  it('validates multiple networks with different addresses', () => {
+    const result = validateSkill(
+      makeManifest({
+        payment: {
+          networks: [
+            {
+              network: 'stellar',
+              payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW'
+            },
+            {
+              network: 'base',
+              payTo: '0x1234567890abcdef1234567890abcdef12345678'
+            }
+          ],
+          asset: 'USDC'
+        }
+      })
+    )
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
+  })
+
+  it('fails for invalid facilitator URL on a network', () => {
+    const result = validateSkill(
+      makeManifest({
+        payment: {
+          networks: [
+            {
+              network: 'stellar',
+              payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW',
+              facilitator: 'not-a-url'
+            }
+          ],
+          asset: 'USDC'
+        }
+      })
+    )
+    expect(result.valid).toBe(false)
+    expect(result.errors).toContainEqual(
+      expect.objectContaining({
+        field: 'payment.networks[0].facilitator',
+        code: 'INVALID_URL'
+      })
+    )
+  })
+
+  it('warns for suspicious address per network', () => {
+    const result = validateSkill(
+      makeManifest({
+        payment: {
+          networks: [
+            { network: 'stellar', payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW' },
+            { network: 'base', payTo: 'not-an-address' }
+          ],
+          asset: 'USDC'
+        }
+      })
+    )
+    expect(result.valid).toBe(true)
+    expect(result.warnings).toContainEqual(
+      expect.objectContaining({
+        field: 'payment.networks[1].payTo',
+        code: 'SUSPICIOUS_ADDRESS'
+      })
+    )
+    // Stellar address should NOT have a warning
+    expect(
+      result.warnings.find(w => w.field === 'payment.networks[0].payTo')
     ).toBeUndefined()
   })
 })
@@ -263,7 +344,7 @@ allowed-tools: [Read, Grep]
     const manifest = makeManifest({
       type: 'SKILL',
       base_url: '',
-      payment: { networks: ['base'], asset: 'USDC', payTo: '' },
+      payment: { networks: [{ network: 'base', payTo: '' }], asset: 'USDC' },
       endpoints: []
     })
     const result = validateSkill(manifest)
@@ -274,7 +355,7 @@ allowed-tools: [Read, Grep]
     const manifest = makeManifest({
       type: 'SKILL',
       base_url: '',
-      payment: { networks: ['base'], asset: 'USDC', payTo: '' },
+      payment: { networks: [{ network: 'base', payTo: '' }], asset: 'USDC' },
       endpoints: [
         {
           path: 'no-slash',

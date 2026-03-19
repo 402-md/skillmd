@@ -18,11 +18,13 @@ export function toMcpToolDefinitions(
   manifest: SkillManifest
 ): McpToolDefinition[] {
   if (manifest.endpoints.length === 0) {
-    return [{
-      name: manifest.name,
-      description: manifest.description,
-      inputSchema: { type: 'object', properties: {} }
-    }]
+    return [
+      {
+        name: manifest.name,
+        description: manifest.description,
+        inputSchema: { type: 'object', properties: {} }
+      }
+    ]
   }
 
   return manifest.endpoints.map(ep => {
@@ -31,7 +33,7 @@ export function toMcpToolDefinitions(
       .replace(/\//g, '_')
       .replace(/[^a-zA-Z0-9_-]/g, '')
 
-    const network = manifest.payment.networks[0] ?? 'unknown'
+    const network = manifest.payment.networks[0]?.network ?? 'unknown'
 
     return {
       name: `${manifest.name}_${slug}`,

@@ -134,22 +134,25 @@ The `payment` block describes how agents pay for the skill. It is **required** w
 
 ```yaml
 payment:
-  networks:
-    - stellar
-    - base
   asset: USDC
-  payTo: GABC...XYZ
-  payToEvm: 0xabc...def
-  facilitator: https://facilitator.402.md
+  networks:
+    - network: stellar
+      payTo: GABC...XYZ
+      facilitator: https://facilitator.402.md
+    - network: base
+      payTo: 0xabc...def
+      facilitator: https://facilitator-base.402.md
 ```
+
+Each entry in the `networks` array co-locates the network identifier with its recipient address and facilitator, eliminating ambiguity when supporting multiple chains.
 
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `payment.networks` | `PaymentNetwork[]` | **Yes** | — | Supported payment networks (min 1). |
 | `payment.asset` | `string` | No | `USDC` | Payment asset/token. |
-| `payment.payTo` | `string` | **Yes** | — | Primary recipient address (Stellar G-address or EVM 0x-address). |
-| `payment.payToEvm` | `string` | No | — | EVM address fallback (`^0x[a-fA-F0-9]{40}$`). |
-| `payment.facilitator` | `string` (URL) | No | — | Facilitator service URL for payment verification and settlement. |
+| `payment.networks` | `NetworkConfig[]` | **Yes** | — | Supported payment networks with per-network configuration (min 1). |
+| `payment.networks[].network` | `PaymentNetwork` | **Yes** | — | Network identifier. |
+| `payment.networks[].payTo` | `string` | **Yes** | — | Recipient address for this network (Stellar G-address or EVM 0x-address). |
+| `payment.networks[].facilitator` | `string` (URL) | No | — | Facilitator service URL for this network. |
 
 **PaymentNetwork** enum:
 
@@ -444,9 +447,10 @@ description: Real-time web scraping with structured output
 base_url: https://api.scraper.dev
 type: API
 payment:
-  networks: [stellar]
   asset: USDC
-  payTo: GABC...XYZ
+  networks:
+    - network: stellar
+      payTo: GABC...XYZ
 endpoints:
   - path: /v1/scrape
     method: POST
@@ -497,9 +501,12 @@ base_url: https://api.weatherco.com
 type: API
 version: 1.0.0
 payment:
-  networks: [stellar, base]
   asset: USDC
-  payTo: GABC...XYZ
+  networks:
+    - network: stellar
+      payTo: GABC...XYZ
+    - network: base
+      payTo: 0xabc...def
 endpoints:
   - path: /v1/current
     method: POST
@@ -650,9 +657,9 @@ project/
 | `MISSING_BASE_URL` | `base_url` | Required when endpoints are present |
 | `INVALID_BASE_URL` | `base_url` | Must be a valid URL |
 | `MISSING_PAYMENT` | `payment` | Required when endpoints are present |
-| `MISSING_NETWORKS` | `payment.networks` | At least one network required |
-| `INVALID_NETWORK` | `payment.networks[]` | Must be a valid PaymentNetwork |
-| `MISSING_PAY_TO` | `payment.payTo` | Recipient address required |
+| `MISSING_NETWORKS` | `payment.networks` | At least one network config required |
+| `INVALID_NETWORK` | `payment.networks[].network` | Must be a valid PaymentNetwork |
+| `MISSING_PAY_TO` | `payment.networks[].payTo` | Recipient address required for each network |
 | `MISSING_ENDPOINTS` | `endpoints` | At least one endpoint required (unless `type: SKILL`) |
 | `INVALID_PATH` | `endpoints[].path` | Must start with `/` |
 | `INVALID_METHOD` | `endpoints[].method` | Must be a valid HttpMethod |
@@ -667,7 +674,7 @@ project/
 | `INVALID_VERSION` | `version` | Should follow semver |
 | `MISSING_TAGS` | `tags` | Recommended for discovery |
 | `TOO_MANY_TAGS` | `tags` | Max 20 tags |
-| `UNRECOGNIZED_ADDRESS` | `payment.payTo` | Address doesn't match known formats |
+| `UNRECOGNIZED_ADDRESS` | `payment.networks[].payTo` | Address doesn't match known formats |
 
 ---
 
@@ -806,13 +813,14 @@ type: API
 license: proprietary
 
 payment:
-  networks:
-    - stellar
-    - base
   asset: USDC
-  payTo: GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW
-  payToEvm: "0x1234567890abcdef1234567890abcdef12345678"
-  facilitator: https://facilitator.402.md
+  networks:
+    - network: stellar
+      payTo: GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW
+      facilitator: https://facilitator.402.md
+    - network: base
+      payTo: "0x1234567890abcdef1234567890abcdef12345678"
+      facilitator: https://facilitator.402.md
 
 endpoints:
   - path: /v1/scrape
@@ -1079,6 +1087,13 @@ making paid calls.
 ---
 
 ## Appendix B: Changelog
+
+### v2.1 (2026-03-19)
+
+- Restructured `payment.networks` from string array to `NetworkConfig[]` objects
+- Each network now co-locates `network`, `payTo`, and `facilitator`
+- Removed top-level `payment.payTo`, `payment.payToEvm`, and `payment.facilitator`
+- Parser maintains backward compatibility with v2.0 flat format
 
 ### v2.0 (2026-03-15)
 

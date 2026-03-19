@@ -27,6 +27,7 @@ export type {
   SkillConfig,
   EndpointSpec,
   PaymentConfig,
+  NetworkConfig,
   SkillType,
   PaymentNetwork,
   HttpMethod,

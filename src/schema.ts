@@ -30,7 +30,8 @@ export const SKILLMD_JSON_SCHEMA = {
       type: 'string',
       minLength: 1,
       maxLength: 2000,
-      description: 'What this skill does. For agent-invoked skills, use trigger phrases.'
+      description:
+        'What this skill does. For agent-invoked skills, use trigger phrases.'
     },
     version: {
       type: 'string',
@@ -57,36 +58,40 @@ export const SKILLMD_JSON_SCHEMA = {
     },
     payment: {
       type: 'object',
-      required: ['networks', 'payTo'],
+      required: ['networks'],
       properties: {
         networks: {
           type: 'array',
           items: {
-            type: 'string',
-            enum: [...PAYMENT_NETWORKS]
+            type: 'object',
+            required: ['network', 'payTo'],
+            properties: {
+              network: {
+                type: 'string',
+                enum: [...PAYMENT_NETWORKS],
+                description: 'Payment network identifier'
+              },
+              payTo: {
+                type: 'string',
+                minLength: 1,
+                description: 'Recipient address for this network'
+              },
+              facilitator: {
+                type: 'string',
+                format: 'uri',
+                description: 'Facilitator service URL for this network'
+              }
+            },
+            additionalProperties: false
           },
           minItems: 1,
-          description: 'Supported payment networks'
+          description:
+            'Supported payment networks with per-network configuration'
         },
         asset: {
           type: 'string',
           default: 'USDC',
           description: 'Payment asset'
-        },
-        payTo: {
-          type: 'string',
-          minLength: 1,
-          description: 'Recipient address (Stellar or EVM)'
-        },
-        payToEvm: {
-          type: 'string',
-          pattern: '^0x[a-fA-F0-9]{40}$',
-          description: 'EVM address (fallback)'
-        },
-        facilitator: {
-          type: 'string',
-          format: 'uri',
-          description: 'Facilitator URL'
         }
       },
       additionalProperties: false
@@ -150,18 +155,12 @@ export const SKILLMD_JSON_SCHEMA = {
       description: 'Free test endpoint URL'
     },
     'allowed-tools': {
-      oneOf: [
-        { type: 'string' },
-        { type: 'array', items: { type: 'string' } }
-      ],
+      oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
       description:
         'Tools the skill is allowed to use (Anthropic Claude Code compatibility)'
     },
     allowedTools: {
-      oneOf: [
-        { type: 'string' },
-        { type: 'array', items: { type: 'string' } }
-      ],
+      oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
       description: 'Alias for allowed-tools (camelCase)'
     }
   },

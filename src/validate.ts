@@ -35,9 +35,10 @@ export function validateSkill(manifest: SkillManifest): ValidationResult {
   validateTags(manifest.tags, warnings)
 
   // For SKILL type (pure agent instructions), base_url/payment/endpoints are optional
+  const hasNetworkWithPayTo = manifest.payment.networks.some(nc => nc.payTo)
   if (isSkillType) {
     if (manifest.base_url) validateBaseUrl(manifest.base_url, errors)
-    if (manifest.payment.payTo) validatePayment(manifest.payment, errors, warnings)
+    if (hasNetworkWithPayTo) validatePayment(manifest.payment, errors, warnings)
     if (manifest.endpoints.length > 0)
       validateEndpoints(manifest.endpoints, errors, warnings)
   } else {
@@ -163,52 +164,47 @@ function validatePayment(
       code: 'REQUIRED'
     })
   } else {
-    for (const network of payment.networks) {
-      if (!PAYMENT_NETWORKS_SET.has(network)) {
+    for (let i = 0; i < payment.networks.length; i++) {
+      const nc = payment.networks[i]
+      const prefix = `payment.networks[${i}]`
+
+      if (!PAYMENT_NETWORKS_SET.has(nc.network)) {
         errors.push({
-          field: 'payment.networks',
-          message: `Invalid network "${network}". Must be one of: ${[...PAYMENT_NETWORKS_SET].join(', ')}`,
+          field: `${prefix}.network`,
+          message: `Invalid network "${nc.network}". Must be one of: ${[...PAYMENT_NETWORKS_SET].join(', ')}`,
           code: 'INVALID_ENUM'
         })
       }
-    }
-  }
 
-  if (!payment.payTo) {
-    errors.push({
-      field: 'payment.payTo',
-      message: 'payTo address is required',
-      code: 'REQUIRED'
-    })
-  } else {
-    const isEvm = EVM_ADDRESS_RE.test(payment.payTo)
-    const isStellar = STELLAR_ADDRESS_RE.test(payment.payTo)
-    if (!isEvm && !isStellar) {
-      warnings.push({
-        field: 'payment.payTo',
-        message: 'payTo does not look like a valid Stellar or EVM address',
-        code: 'SUSPICIOUS_ADDRESS'
-      })
-    }
-  }
+      if (!nc.payTo) {
+        errors.push({
+          field: `${prefix}.payTo`,
+          message: `payTo address is required for network "${nc.network}"`,
+          code: 'REQUIRED'
+        })
+      } else {
+        const isEvm = EVM_ADDRESS_RE.test(nc.payTo)
+        const isStellar = STELLAR_ADDRESS_RE.test(nc.payTo)
+        if (!isEvm && !isStellar) {
+          warnings.push({
+            field: `${prefix}.payTo`,
+            message: `payTo for "${nc.network}" does not look like a valid Stellar or EVM address`,
+            code: 'SUSPICIOUS_ADDRESS'
+          })
+        }
+      }
 
-  if (payment.payToEvm && !EVM_ADDRESS_RE.test(payment.payToEvm)) {
-    errors.push({
-      field: 'payment.payToEvm',
-      message: 'payToEvm must be a valid EVM address (0x...)',
-      code: 'INVALID_FORMAT'
-    })
-  }
-
-  if (payment.facilitator) {
-    try {
-      new URL(payment.facilitator)
-    } catch {
-      errors.push({
-        field: 'payment.facilitator',
-        message: 'facilitator must be a valid URL',
-        code: 'INVALID_URL'
-      })
+      if (nc.facilitator) {
+        try {
+          new URL(nc.facilitator)
+        } catch {
+          errors.push({
+            field: `${prefix}.facilitator`,
+            message: 'facilitator must be a valid URL',
+            code: 'INVALID_URL'
+          })
+        }
+      }
     }
   }
 

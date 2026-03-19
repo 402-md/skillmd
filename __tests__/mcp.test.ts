@@ -11,9 +11,13 @@ function makeManifest(
     base_url: 'https://api.weatherco.com',
     type: 'API',
     payment: {
-      networks: ['stellar'],
-      asset: 'USDC',
-      payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW'
+      networks: [
+        {
+          network: 'stellar',
+          payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW'
+        }
+      ],
+      asset: 'USDC'
     },
     endpoints: [
       {
@@ -89,9 +93,11 @@ describe('toMcpToolDefinitions', () => {
     const tools = toMcpToolDefinitions(
       makeManifest({
         payment: {
-          networks: ['base', 'stellar'],
-          asset: 'USDC',
-          payTo: '0x1234567890abcdef1234567890abcdef12345678'
+          networks: [
+            { network: 'base', payTo: '0x1234567890abcdef1234567890abcdef12345678' },
+            { network: 'stellar', payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW' }
+          ],
+          asset: 'USDC'
         }
       })
     )

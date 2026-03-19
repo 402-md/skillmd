@@ -11,7 +11,7 @@
 
 SKILL.md is an open format for describing what a service does, how much it costs, and how agents can use it — in a single markdown file readable by both humans and machines.
 
-This package is the **reference implementation** of the [SKILL.md Specification v2.0](./SPEC.md). One dependency (`yaml`). Works in Node, browsers, and edge runtimes.
+This package is the **reference implementation** of the [SKILL.md Specification v2.1](./SPEC.md). One dependency (`yaml`). Works in Node, browsers, and edge runtimes.
 
 ```bash
 npm install @402md/skillmd
@@ -38,9 +38,12 @@ description: Real-time weather data
 base_url: https://api.weatherco.com
 type: API
 payment:
-  networks: [stellar, base]
   asset: USDC
-  payTo: GABC...XYZ
+  networks:
+    - network: stellar
+      payTo: GABC...XYZ
+    - network: base
+      payTo: 0xabc...def
 endpoints:
   - path: /v1/current
     method: POST
@@ -82,8 +85,10 @@ base_url: https://api.scraper.pro
 type: API
 allowed-tools: [Read, Bash]
 payment:
-  networks: [stellar]
-  payTo: GABC...XYZ
+  asset: USDC
+  networks:
+    - network: stellar
+      payTo: GABC...XYZ
 endpoints:
   - path: /v1/scrape
     method: POST
@@ -110,9 +115,12 @@ description: Real-time weather data
 base_url: https://api.weatherco.com
 type: API
 payment:
-  networks: [stellar, base]
   asset: USDC
-  payTo: GABC...XYZ
+  networks:
+    - network: stellar
+      payTo: GABC...XYZ
+    - network: base
+      payTo: 0xabc...def
 endpoints:
   - path: /v1/current
     method: POST
@@ -123,10 +131,11 @@ endpoints:
 # Weather API
 `)
 
-manifest.name                // 'weather-api'
-manifest.type                // 'API'
-manifest.payment.networks    // ['stellar', 'base']
-manifest.endpoints[0].path   // '/v1/current'
+manifest.name                          // 'weather-api'
+manifest.type                          // 'API'
+manifest.payment.networks[0].network   // 'stellar'
+manifest.payment.networks[0].payTo     // 'GABC...XYZ'
+manifest.endpoints[0].path             // '/v1/current'
 ```
 
 Anthropic-style skills work too:
@@ -180,9 +189,10 @@ const apiSkill = generateSkillMd({
   description: 'Does cool things',
   base_url: 'https://api.example.com',
   payment: {
-    networks: ['stellar'],
     asset: 'USDC',
-    payTo: 'GABC...XYZ'
+    networks: [
+      { network: 'stellar', payTo: 'GABC...XYZ' }
+    ]
   },
   endpoints: [
     { path: '/v1/run', method: 'POST', description: 'Run the thing', priceUsdc: '0.001' }
@@ -224,7 +234,8 @@ import { generateFromOpenAPI, toOpenAPI } from '@402md/skillmd'
 
 // OpenAPI → SKILL.md
 const manifest = generateFromOpenAPI(openApiSpec, {
-  networks: ['base'], asset: 'USDC', payTo: '0xabc...def'
+  asset: 'USDC',
+  networks: [{ network: 'base', payTo: '0xabc...def' }]
 }, {
   pricing: { 'GET /pets': '0.001', '*': '0.005' }
 })
@@ -271,13 +282,14 @@ base_url: https://api.weatherco.com
 type: API
 
 payment:
-  networks:
-    - stellar
-    - base
   asset: USDC
-  payTo: GABC...XYZ
-  payToEvm: "0xabc...def"
-  facilitator: https://x402.org/facilitator
+  networks:
+    - network: stellar
+      payTo: GABC...XYZ
+      facilitator: https://x402.org/facilitator
+    - network: base
+      payTo: "0xabc...def"
+      facilitator: https://x402.org/facilitator
 
 endpoints:
   - path: /v1/current
@@ -318,8 +330,8 @@ For `type: API` (or any type with endpoints):
 | `name` | Unique identifier (kebab-case) |
 | `description` | What the skill does |
 | `base_url` | Base URL of the API |
-| `payment.networks` | Supported chains (`stellar`, `base`, `base-sepolia`, `stellar-testnet`) |
-| `payment.payTo` | Recipient wallet address |
+| `payment.networks[].network` | Payment chain (`stellar`, `base`, `base-sepolia`, `stellar-testnet`) |
+| `payment.networks[].payTo` | Recipient wallet address for the network |
 | `endpoints[].path` | Endpoint path (starts with `/`) |
 | `endpoints[].method` | HTTP method |
 | `endpoints[].description` | What the endpoint does |
@@ -342,8 +354,7 @@ For `type: SKILL` (agent instructions only):
 | `license` | License identifier (`MIT`, `proprietary`, etc.) |
 | `type` | `API` \| `SAAS` \| `PRODUCT` \| `SERVICE` \| `SUBSCRIPTION` \| `CONTENT` \| `SKILL` |
 | `payment.asset` | Payment asset (default: `USDC`) |
-| `payment.payToEvm` | EVM address fallback |
-| `payment.facilitator` | Facilitator URL |
+| `payment.networks[].facilitator` | Facilitator URL for the network |
 | `endpoints[].inputSchema` | JSON Schema for request body |
 | `endpoints[].outputSchema` | JSON Schema for response |
 | `tags` | Discovery tags (max 20) |
@@ -401,7 +412,7 @@ SKILL.md is the foundation of the 402md ecosystem:
 
 ## Legacy v1 Support
 
-The parser handles v1 SKILL.md files (without the `payment` block). The `price` field on endpoints is mapped to `priceUsdc`, and payment defaults to `{ networks: ['base'], asset: 'USDC', payTo: '' }`.
+The parser handles v1 SKILL.md files (without the `payment` block). The `price` field on endpoints is mapped to `priceUsdc`, and payment defaults to `{ networks: [{ network: 'base', payTo: '' }], asset: 'USDC' }`. The parser also converts the legacy v2.0 flat format (top-level `payTo`/`payToEvm`/`facilitator`) to the per-network `NetworkConfig[]` structure automatically.
 
 ## License
 

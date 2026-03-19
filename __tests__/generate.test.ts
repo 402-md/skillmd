@@ -15,10 +15,19 @@ const CONFIG: SkillConfig = {
   base_url: 'https://api.weatherco.com',
   type: 'API',
   payment: {
-    networks: ['stellar', 'base'],
-    asset: 'USDC',
-    payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW',
-    facilitator: 'https://x402.org/facilitator'
+    networks: [
+      {
+        network: 'stellar',
+        payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW',
+        facilitator: 'https://x402.org/facilitator'
+      },
+      {
+        network: 'base',
+        payTo: '0x1234567890abcdef1234567890abcdef12345678',
+        facilitator: 'https://x402.org/facilitator'
+      }
+    ],
+    asset: 'USDC'
   },
   endpoints: [
     {
@@ -57,10 +66,18 @@ describe('generateSkillMd', () => {
     expect(manifest.version).toBe('1.0.0')
     expect(manifest.base_url).toBe('https://api.weatherco.com')
     expect(manifest.type).toBe('API')
-    expect(manifest.payment.networks).toEqual(['stellar', 'base'])
-    expect(manifest.payment.payTo).toBe(
-      'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW'
-    )
+    expect(manifest.payment.networks).toEqual([
+      {
+        network: 'stellar',
+        payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW',
+        facilitator: 'https://x402.org/facilitator'
+      },
+      {
+        network: 'base',
+        payTo: '0x1234567890abcdef1234567890abcdef12345678',
+        facilitator: 'https://x402.org/facilitator'
+      }
+    ])
     expect(manifest.endpoints).toHaveLength(1)
     expect(manifest.endpoints[0].priceUsdc).toBe('0.001')
     expect(manifest.tags).toEqual(['weather'])
@@ -83,9 +100,10 @@ describe('generateSkillMd', () => {
       description: 'Minimal skill',
       base_url: 'https://example.com',
       payment: {
-        networks: ['base'],
-        asset: 'USDC',
-        payTo: '0x1234567890abcdef1234567890abcdef12345678'
+        networks: [
+          { network: 'base', payTo: '0x1234567890abcdef1234567890abcdef12345678' }
+        ],
+        asset: 'USDC'
       },
       endpoints: [
         {
@@ -154,9 +172,10 @@ describe('generateFromOpenAPI', () => {
 
   it('converts OpenAPI spec to a manifest', () => {
     const manifest = generateFromOpenAPI(OPENAPI_SPEC, {
-      networks: ['base'],
-      asset: 'USDC',
-      payTo: '0x1234567890abcdef1234567890abcdef12345678'
+      networks: [
+        { network: 'base', payTo: '0x1234567890abcdef1234567890abcdef12345678' }
+      ],
+      asset: 'USDC'
     })
 
     expect(manifest.name).toBe('pet-store-api')
@@ -182,7 +201,7 @@ describe('generateFromOpenAPI', () => {
   it('uses default price and allows override', () => {
     const manifest = generateFromOpenAPI(
       OPENAPI_SPEC,
-      { networks: ['base'], asset: 'USDC', payTo: '0x123' },
+      { networks: [{ network: 'base', payTo: '0x123' }], asset: 'USDC' },
       { defaultPrice: '0.05' }
     )
 
@@ -192,7 +211,7 @@ describe('generateFromOpenAPI', () => {
   it('allows base URL override', () => {
     const manifest = generateFromOpenAPI(
       OPENAPI_SPEC,
-      { networks: ['stellar'], asset: 'USDC', payTo: 'GABC...' },
+      { networks: [{ network: 'stellar', payTo: 'GABC...' }], asset: 'USDC' },
       { baseUrlOverride: 'https://custom.example.com' }
     )
 
@@ -202,7 +221,7 @@ describe('generateFromOpenAPI', () => {
   it('applies per-endpoint pricing', () => {
     const manifest = generateFromOpenAPI(
       OPENAPI_SPEC,
-      { networks: ['base'], asset: 'USDC', payTo: '0x123' },
+      { networks: [{ network: 'base', payTo: '0x123' }], asset: 'USDC' },
       {
         pricing: {
           'GET /pets': '0.001',
@@ -220,7 +239,7 @@ describe('generateFromOpenAPI', () => {
   it('uses wildcard fallback in pricing', () => {
     const manifest = generateFromOpenAPI(
       OPENAPI_SPEC,
-      { networks: ['base'], asset: 'USDC', payTo: '0x123' },
+      { networks: [{ network: 'base', payTo: '0x123' }], asset: 'USDC' },
       {
         pricing: {
           'POST /pets': '0.10',
@@ -238,7 +257,7 @@ describe('generateFromOpenAPI', () => {
   it('falls back to defaultPrice when pricing has no match', () => {
     const manifest = generateFromOpenAPI(
       OPENAPI_SPEC,
-      { networks: ['base'], asset: 'USDC', payTo: '0x123' },
+      { networks: [{ network: 'base', payTo: '0x123' }], asset: 'USDC' },
       {
         defaultPrice: '0.007',
         pricing: {
@@ -261,9 +280,13 @@ describe('toOpenAPI', () => {
     base_url: 'https://api.weatherco.com',
     type: 'API',
     payment: {
-      networks: ['stellar'],
-      asset: 'USDC',
-      payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW'
+      networks: [
+        {
+          network: 'stellar',
+          payTo: 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW'
+        }
+      ],
+      asset: 'USDC'
     },
     endpoints: [
       {
