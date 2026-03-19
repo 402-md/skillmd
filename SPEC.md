@@ -1,7 +1,8 @@
-# SKILL.md Specification v2.0
+# SKILL.md Specification v3.0
 
 > **Status:** Draft
 > **Created:** 2026-03-15
+> **Updated:** 2026-03-19
 > **Authors:** 402md contributors
 > **Reference Implementation:** [@402md/skillmd](https://github.com/402-md/skillmd)
 
@@ -102,22 +103,35 @@ Both styles are valid. Parsers MUST accept both.
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `type` | `SkillType` | No | `API` | Category of the skill. |
+| `pricingModel` | `PricingModel` | No | — | Payment semantics for the skill. |
 | `tags` | `string[]` | No | `[]` | Discovery tags (max 20 items). |
 | `category` | `string` | No | — | Primary category for marketplace listing. |
 
 **SkillType** enum:
 
-| Value | Description |
-|-------|-------------|
-| `API` | RESTful API endpoint(s) |
-| `SAAS` | Software-as-a-Service with API access |
-| `PRODUCT` | Digital product (dataset, model, etc.) |
-| `SERVICE` | Human-in-the-loop or async service |
-| `SUBSCRIPTION` | Recurring access |
-| `CONTENT` | Static content (docs, reports, etc.) |
-| `SKILL` | Agent instruction/prompt (no paid endpoints) |
+| Value | Description | Typical `pricingModel` |
+|-------|-------------|----------------------|
+| `API` | RESTful API with per-call pricing | `fixed` |
+| `SAAS` | Software-as-a-Service with API access | `subscription` |
+| `PRODUCT` | Digital or physical product | `cart` or `dynamic` |
+| `SERVICE` | Human-in-the-loop or async service | `dynamic` |
+| `SUBSCRIPTION` | Recurring time-based access | `subscription` |
+| `CONTENT` | Static content (docs, reports, etc.) | `fixed` |
+| `SKILL` | Agent instruction/prompt (no paid endpoints) | `free` |
 
 > **Note:** The `SKILL` type indicates a pure agent instruction (Anthropic-style skill) with no paid endpoints. The `payment` and `endpoints` fields are optional when `type: SKILL`.
+
+**PricingModel** enum:
+
+| Value | Description | x402 behavior |
+|-------|-------------|---------------|
+| `fixed` | Every endpoint has a known, fixed price per call | Standard x402 flow |
+| `dynamic` | Price varies per request (server calculates at request time) | 402 response contains the real amount |
+| `subscription` | Pay once for time-based access, then use endpoints freely | x402 for subscription payment; wallet signature for subsequent auth |
+| `cart` | Agent collects items, server calculates total at checkout | Free endpoints for browsing; x402 with dynamic price at checkout |
+| `free` | No payment required for any endpoint | No x402 middleware |
+
+The `pricingModel` field describes the **overall payment semantics** of the skill. Individual endpoints may still have different prices (`priceUsdc: "0"` for free, `"dynamic"` for variable, or a fixed decimal).
 
 ### 3.4 Service Fields
 
@@ -163,7 +177,37 @@ Each entry in the `networks` array co-locates the network identifier with its re
 | `base` | Base mainnet (Coinbase L2) |
 | `base-sepolia` | Base Sepolia testnet |
 
-### 3.6 Endpoint Fields
+### 3.6 Authentication Fields
+
+The `auth` block describes how agents identify themselves for non-payment requests (e.g., after subscribing). It is **optional** and primarily used with `pricingModel: subscription`.
+
+```yaml
+auth:
+  method: wallet-signature
+  loginEndpoint: /v1/auth
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `auth.method` | `string` | **Yes** (when `auth` present) | Authentication method. Common value: `wallet-signature`. |
+| `auth.loginEndpoint` | `string` | No | Endpoint path for wallet-based authentication. Must start with `/`. |
+
+**How wallet-signature auth works:**
+
+In x402, the **wallet address is the user's identity**. After a subscription payment, the server knows the payer's address. For subsequent requests, the agent proves wallet ownership by signing a message — this is a **free, local operation** that does not involve the facilitator or blockchain.
+
+```
+1. Agent signs message: "Login: {timestamp}" with private key
+2. Agent sends wallet + signature to loginEndpoint
+3. Server verifies signature locally (free, ~1ms)
+4. Server checks subscription status for that wallet
+5. Server returns JWT for the subscription period
+6. Agent uses JWT on subsequent requests
+```
+
+> **Important:** Verifying a wallet signature is a local cryptographic operation. It does NOT go through the facilitator and costs nothing. The facilitator is only involved when actual payment (USDC transfer) occurs.
+
+### 3.7 Endpoint Fields
 
 The `endpoints` array describes callable API endpoints with per-call pricing.
 
@@ -194,13 +238,53 @@ endpoints:
 | `endpoints[].path` | `string` | **Yes** | Endpoint path. MUST start with `/`. |
 | `endpoints[].method` | `HttpMethod` | **Yes** | HTTP method. |
 | `endpoints[].description` | `string` | **Yes** | What this endpoint does. |
-| `endpoints[].priceUsdc` | `string` | **Yes** | Price per call in USDC (e.g., `"0.001"`). Decimal format: `^\d+(\.\d+)?$`. |
+| `endpoints[].priceUsdc` | `string` | **Yes** | Price per call in USDC (e.g., `"0.001"`) or `"dynamic"` for server-determined pricing. Decimal format: `^(\d+(\.\d+)?|dynamic)$`. |
+| `endpoints[].estimatedPriceUsdc` | `string` | No | Estimated price for dynamic endpoints (e.g., `"25.00"`). Informational — the actual price comes from the 402 response. |
+| `endpoints[].duration` | `string` | No | Access duration granted by this endpoint (e.g., `"30d"`, `"1h"`, `"1y"`). Format: `^\d+(m\|h\|d\|y)$`. Used with subscription endpoints. |
+| `endpoints[].deliveryMode` | `DeliveryMode` | No | How results are delivered. Default: `sync`. |
 | `endpoints[].inputSchema` | `JSONSchema` | No | JSON Schema for the request body. |
 | `endpoints[].outputSchema` | `JSONSchema` | No | JSON Schema for the response body. |
 
 **HttpMethod** enum: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`.
 
-### 3.7 Agent Integration Fields
+**DeliveryMode** enum:
+
+| Value | Description |
+|-------|-------------|
+| `sync` | Response is immediate (default for API calls) |
+| `polling` | Returns a job ID; agent polls a status endpoint for results |
+| `webhook` | Server pushes results to a callback URL when ready |
+
+#### 3.7.1 Dynamic Pricing
+
+When `priceUsdc` is `"dynamic"`, the actual cost is determined by the server at request time and communicated via the HTTP 402 response. This is used for:
+
+- **Cart checkout** — price = sum of items + shipping
+- **Variable-length processing** — price depends on input size (e.g., word count for translation)
+- **Resource-based billing** — price depends on compute time, storage, etc.
+
+The `estimatedPriceUsdc` field provides budget guidance for agents. It SHOULD be set for dynamic endpoints so agents can inform users of approximate costs before making the call.
+
+The x402 protocol already supports dynamic pricing natively — the server's `paywall()` middleware accepts any price, calculated per-request. The `client.fetch()` reads the amount from the 402 response and pays it (subject to budget limits).
+
+```yaml
+# Fixed pricing — agent knows exact cost upfront
+- path: /v1/search
+  priceUsdc: "0.001"
+
+# Dynamic pricing — agent learns cost from 402 response
+- path: /v1/checkout
+  priceUsdc: dynamic
+  estimatedPriceUsdc: "25.00"
+
+# Free endpoint — no x402 paywall
+- path: /v1/cart/view
+  priceUsdc: "0"
+```
+
+> **Note:** Endpoints with `priceUsdc: "0"` do not require x402 payment middleware. They are regular HTTP endpoints.
+
+### 3.8 Agent Integration Fields
 
 These fields support integration with agent frameworks.
 
@@ -208,7 +292,7 @@ These fields support integration with agent frameworks.
 |-------|------|----------|-------------|
 | `allowed-tools` | `string \| string[]` | No | Tools the skill is allowed to use (Anthropic compatibility). E.g., `"Bash"`, `["Bash", "Read", "Write"]`. |
 
-### 3.8 Extensibility
+### 3.9 Extensibility
 
 The frontmatter schema allows additional properties (`additionalProperties: true`). Parsers MUST preserve unknown fields and MUST NOT reject them. This enables ecosystem-specific extensions without breaking compatibility.
 
@@ -373,9 +457,9 @@ For skills with multiple endpoints, include a workflow section that tells the ag
 
 ### Get current weather for a city
 
-1. Call `POST /v1/current` with `{ "location": "São Paulo" }` ($0.001)
+1. Call `POST /v1/current` with `{ "location": "New York" }` ($0.001)
 2. If the user wants a forecast, call `POST /v1/forecast`
-   with `{ "location": "São Paulo", "days": 7 }` ($0.005)
+   with `{ "location": "New York", "days": 7 }` ($0.005)
 3. Always tell the user the cost before making the call
 4. If the location is ambiguous, ask the user to clarify before calling
 
@@ -432,11 +516,11 @@ Longer is better than shorter. An agent with too much context wastes tokens. An 
 
 ## 5. Skill Profiles
 
-A SKILL.md can serve different use cases. The required fields vary by profile:
+A SKILL.md can serve different use cases. The required fields and payment semantics vary by profile:
 
-### 5.1 Paid API Profile
+### 5.1 API Profile (`type: API`, `pricingModel: fixed`)
 
-For services that charge per API call via x402.
+For services that charge a fixed price per API call via x402.
 
 **Required:** `name`, `description`, `base_url`, `payment`, `endpoints`
 
@@ -446,6 +530,7 @@ name: web-scraper
 description: Real-time web scraping with structured output
 base_url: https://api.scraper.dev
 type: API
+pricingModel: fixed
 payment:
   asset: USDC
   networks:
@@ -459,9 +544,92 @@ endpoints:
 ---
 ```
 
-### 5.2 Agent Skill Profile
+See [`examples/api-weather/SKILL.md`](./examples/api-weather/SKILL.md) for a complete example.
 
-For Claude Code skills and agent instructions. Compatible with Anthropic's format.
+### 5.2 Product Profile (`type: PRODUCT`, `pricingModel: cart`)
+
+For e-commerce where the agent acts as the shopping cart. The agent collects items and shipping info from the user, then sends everything in a single order request. The server calculates the total dynamically.
+
+**Required:** `name`, `description`, `base_url`, `payment`, `endpoints`
+
+```yaml
+---
+name: acme-shop
+type: PRODUCT
+pricingModel: cart
+endpoints:
+  - path: /v1/products/search
+    priceUsdc: "0"                    # free — browse without paying
+  - path: /v1/orders
+    priceUsdc: dynamic                # price = cart total + shipping
+    estimatedPriceUsdc: "25.00"
+---
+```
+
+**Key design principle:** The cart lives in the agent's context, not on the server. The agent collects items during conversation and sends them all at checkout. This keeps the server stateless and reduces x402 payment round-trips to a single call.
+
+See [`examples/shop-acme/SKILL.md`](./examples/shop-acme/SKILL.md) for a complete example.
+
+### 5.3 Subscription Profile (`type: SUBSCRIPTION`, `pricingModel: subscription`)
+
+For services where the agent pays once for time-based access, then uses endpoints freely via wallet-based authentication.
+
+**Required:** `name`, `description`, `base_url`, `payment`, `endpoints`, `auth`
+
+```yaml
+---
+name: analytics-pro
+type: SUBSCRIPTION
+pricingModel: subscription
+auth:
+  method: wallet-signature
+  loginEndpoint: /v1/auth
+endpoints:
+  - path: /v1/subscribe
+    priceUsdc: "10.00"
+    duration: "30d"                   # 30 days of access
+  - path: /v1/auth
+    priceUsdc: "0"                    # wallet auth is free
+  - path: /v1/data
+    priceUsdc: "0"                    # free after subscribing
+---
+```
+
+**Identity model:** The wallet address IS the user's identity. After paying via x402, the server knows the payer's address. For subsequent requests, the agent signs a message to prove wallet ownership — a free, local cryptographic operation that does not involve the facilitator.
+
+See [`examples/saas-analytics/SKILL.md`](./examples/saas-analytics/SKILL.md) for a complete example.
+
+### 5.4 Service Profile (`type: SERVICE`, `pricingModel: dynamic`)
+
+For async services where results are not immediate (human review, heavy processing, etc.).
+
+**Required:** `name`, `description`, `base_url`, `payment`, `endpoints`
+
+```yaml
+---
+name: human-translation
+type: SERVICE
+pricingModel: dynamic
+endpoints:
+  - path: /v1/jobs
+    method: POST
+    priceUsdc: dynamic
+    estimatedPriceUsdc: "5.00"
+    deliveryMode: polling             # agent polls for results
+  - path: /v1/jobs/{jobId}
+    method: GET
+    priceUsdc: "0"                    # status checks are free
+    deliveryMode: polling
+---
+```
+
+**Delivery modes:** When `deliveryMode` is `polling`, the agent should periodically check the status endpoint until the job completes. When `webhook`, the server pushes results to a callback URL.
+
+See [`examples/service-translation/SKILL.md`](./examples/service-translation/SKILL.md) for a complete example.
+
+### 5.5 Agent Skill Profile (`type: SKILL`, `pricingModel: free`)
+
+For Claude Code skills and agent instructions. Compatible with Anthropic's format. No payment required.
 
 **Required:** `name`, `description`
 
@@ -484,9 +652,9 @@ When reviewing code, follow these steps:
 4. Suggest improvements only when asked
 ```
 
-### 5.3 Hybrid Profile
+### 5.6 Hybrid Profile
 
-A paid API that also provides agent instructions for how to use it.
+A paid API that also provides agent instructions for how to use it. Combines any paid profile (API, Product, Service) with agent workflow instructions in the body.
 
 **Required:** `name`, `description`, `base_url`, `payment`, `endpoints`
 
@@ -496,28 +664,20 @@ name: weather-api
 description: >-
   This skill should be used when the user asks about "weather",
   "temperature", "forecast", or needs meteorological data.
-  Real-time weather data for any location worldwide.
 base_url: https://api.weatherco.com
 type: API
-version: 1.0.0
+pricingModel: fixed
+allowed-tools: [Read, Bash]
 payment:
   asset: USDC
   networks:
     - network: stellar
       payTo: GABC...XYZ
-    - network: base
-      payTo: 0xabc...def
 endpoints:
   - path: /v1/current
     method: POST
     description: Get current weather
     priceUsdc: "0.001"
-    inputSchema:
-      type: object
-      properties:
-        location:
-          type: string
-      required: [location]
 tags: [weather, geolocation]
 ---
 
@@ -527,11 +687,6 @@ When the user asks about weather:
 1. Call `/v1/current` with the location ($0.001 per call)
 2. If they want a forecast, call `/v1/forecast` ($0.005)
 3. Always show the cost before making the call
-
-## Quick Start
-
-POST /v1/current with `{ "location": "São Paulo" }`
-Returns `{ "temperature": 28, "conditions": "partly cloudy" }`
 ```
 
 ---
@@ -663,7 +818,11 @@ project/
 | `MISSING_ENDPOINTS` | `endpoints` | At least one endpoint required (unless `type: SKILL`) |
 | `INVALID_PATH` | `endpoints[].path` | Must start with `/` |
 | `INVALID_METHOD` | `endpoints[].method` | Must be a valid HttpMethod |
-| `INVALID_PRICE` | `endpoints[].priceUsdc` | Must match `^\d+(\.\d+)?$` |
+| `INVALID_PRICE` | `endpoints[].priceUsdc` | Must match `^\d+(\.\d+)?$` or be `"dynamic"` |
+| `INVALID_DURATION` | `endpoints[].duration` | Must match `^\d+(m\|h\|d\|y)$` |
+| `INVALID_DELIVERY_MODE` | `endpoints[].deliveryMode` | Must be: `sync`, `polling`, `webhook` |
+| `MISSING_AUTH_METHOD` | `auth.method` | Required when `auth` is specified |
+| `INVALID_LOGIN_ENDPOINT` | `auth.loginEndpoint` | Must start with `/` |
 | `DUPLICATE_ENDPOINT` | `endpoints[]` | Duplicate `{method} {path}` |
 
 ### 9.2 Warnings (SHOULD fix)
@@ -675,6 +834,9 @@ project/
 | `MISSING_TAGS` | `tags` | Recommended for discovery |
 | `TOO_MANY_TAGS` | `tags` | Max 20 tags |
 | `UNRECOGNIZED_ADDRESS` | `payment.networks[].payTo` | Address doesn't match known formats |
+| `UNKNOWN_PRICING_MODEL` | `pricingModel` | Unknown pricing model value |
+| `UNNECESSARY_FIELD` | `endpoints[].estimatedPriceUsdc` | Only meaningful when `priceUsdc` is `"dynamic"` |
+| `MISSING_ESTIMATE` | `endpoints[].estimatedPriceUsdc` | Dynamic pricing without estimate — agents cannot budget |
 
 ---
 
@@ -1088,8 +1250,16 @@ making paid calls.
 
 ## Appendix B: Changelog
 
-### v2.1 (2026-03-19)
+### v3.0 (2026-03-19)
 
+- Added `pricingModel` field: `fixed`, `dynamic`, `subscription`, `cart`, `free`
+- Added `auth` block with `wallet-signature` method for subscription-based identity
+- Added `estimatedPriceUsdc` for dynamic pricing budget guidance
+- Added `duration` field for subscription endpoints (e.g., `"30d"`)
+- Added `deliveryMode` field: `sync`, `polling`, `webhook`
+- `priceUsdc` now accepts `"dynamic"` for server-determined pricing
+- Expanded Skill Profiles with Product/Cart, Subscription, and Service patterns
+- Added examples directory with complete SKILL.md for each profile type
 - Restructured `payment.networks` from string array to `NetworkConfig[]` objects
 - Each network now co-locates `network`, `payTo`, and `facilitator`
 - Removed top-level `payment.payTo`, `payment.payToEvm`, and `payment.facilitator`
